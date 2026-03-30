@@ -1,112 +1,47 @@
-# ===========================================================================
-# VPC
-# ===========================================================================
+locals {
+  public_key = trimspace(file(var.public_key_path))
+}
 
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_support   = true
+resource "aws_key_pair" "assignment_key" {
+  key_name   = "devops-assignment-key"
+  public_key = local.public_key
+}
+
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+
+  name = "devops-assignment-vpc"
+  cidr = "10.0.0.0/16"
+
+  azs             = ["${var.aws_region}a", "${var.aws_region}b"]
+  public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
+  private_subnets = ["10.0.11.0/24", "10.0.12.0/24"]
+
+  enable_nat_gateway = false
+  single_nat_gateway = false
+
   enable_dns_hostnames = true
+  enable_dns_support   = true
 
-  tags = {
-    Name      = "${var.project_name}-vpc"
-    ManagedBy = "Terraform"
-  }
-}
-
-# ===========================================================================
-# Internet Gateway
-# ===========================================================================
-
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name      = "${var.project_name}-igw"
-    ManagedBy = "Terraform"
-  }
-}
-
-# ===========================================================================
-# Subnets
-# ===========================================================================
-
-resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidr
-  availability_zone       = "${var.aws_region}a"
   map_public_ip_on_launch = true
 
   tags = {
-    Name      = "${var.project_name}-public-subnet"
-    ManagedBy = "Terraform"
+    Project = "devops-assignment"
   }
 }
 
-resource "aws_subnet" "private" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidr
-  availability_zone = "${var.aws_region}a"
-
-  tags = {
-    Name      = "${var.project_name}-private-subnet"
-    ManagedBy = "Terraform"
-  }
-}
-
-# ===========================================================================
-# Route Tables
-# ===========================================================================
-
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
-
-  tags = {
-    Name      = "${var.project_name}-public-rt"
-    ManagedBy = "Terraform"
-  }
-}
-
-resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public.id
-}
-
-# Private subnet has no route to the internet (intentionally isolated)
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name      = "${var.project_name}-private-rt"
-    ManagedBy = "Terraform"
-  }
-}
-
-resource "aws_route_table_association" "private" {
-  subnet_id      = aws_subnet.private.id
-  route_table_id = aws_route_table.private.id
-}
-
-# ===========================================================================
-# Security Groups
-# ===========================================================================
-
-# Bastion — allows SSH from a trusted CIDR
-resource "aws_security_group" "bastion" {
-  name        = "${var.project_name}-bastion-sg"
-  description = "Allow SSH inbound from trusted IP; all outbound"
-  vpc_id      = aws_vpc.main.id
+resource "aws_security_group" "bastion_sg" {
+  name        = "bastion-sg"
+  description = "Allow SSH from my IP only"
+  vpc_id      = module.vpc.vpc_id
 
   ingress {
-    description = "SSH from trusted IP"
+    description = "SSH from my IP"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
+    cidr_blocks = [var.my_ip_cidr]
   }
 
   egress {
@@ -117,23 +52,21 @@ resource "aws_security_group" "bastion" {
   }
 
   tags = {
-    Name      = "${var.project_name}-bastion-sg"
-    ManagedBy = "Terraform"
+    Name = "bastion-sg"
   }
 }
 
-# Private instance — allows SSH only from the bastion security group
-resource "aws_security_group" "private" {
-  name        = "${var.project_name}-private-sg"
-  description = "Allow SSH inbound from bastion only; all outbound"
-  vpc_id      = aws_vpc.main.id
+resource "aws_security_group" "private_sg" {
+  name        = "private-sg"
+  description = "Allow SSH only from bastion"
+  vpc_id      = module.vpc.vpc_id
 
   ingress {
-    description     = "SSH from bastion"
+    description     = "SSH from bastion SG"
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
-    security_groups = [aws_security_group.bastion.id]
+    security_groups = [aws_security_group.bastion_sg.id]
   }
 
   egress {
@@ -144,51 +77,32 @@ resource "aws_security_group" "private" {
   }
 
   tags = {
-    Name      = "${var.project_name}-private-sg"
-    ManagedBy = "Terraform"
+    Name = "private-sg"
   }
 }
-
-# ===========================================================================
-# EC2 Instances
-# ===========================================================================
 
 resource "aws_instance" "bastion" {
-  ami                    = var.ami_id
-  instance_type          = var.instance_type
-  subnet_id              = aws_subnet.public.id
-  key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.bastion.id]
-
-  root_block_device {
-    volume_size           = 20
-    volume_type           = "gp3"
-    delete_on_termination = true
-  }
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = module.vpc.public_subnets[0]
+  vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
+  associate_public_ip_address = true
+  key_name                    = aws_key_pair.assignment_key.key_name
 
   tags = {
-    Name      = "${var.project_name}-bastion"
-    Role      = "bastion"
-    ManagedBy = "Terraform"
+    Name = "bastion-host"
   }
 }
 
-resource "aws_instance" "private" {
+resource "aws_instance" "private_instances" {
+  count                  = 6
   ami                    = var.ami_id
   instance_type          = var.instance_type
-  subnet_id              = aws_subnet.private.id
-  key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.private.id]
-
-  root_block_device {
-    volume_size           = 20
-    volume_type           = "gp3"
-    delete_on_termination = true
-  }
+  subnet_id              = module.vpc.private_subnets[count.index % 2]
+  vpc_security_group_ids = [aws_security_group.private_sg.id]
+  key_name               = aws_key_pair.assignment_key.key_name
 
   tags = {
-    Name      = "${var.project_name}-private"
-    Role      = "private"
-    ManagedBy = "Terraform"
+    Name = "private-instance-${count.index + 1}"
   }
 }
