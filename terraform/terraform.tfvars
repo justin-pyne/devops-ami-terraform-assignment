@@ -1,5 +1,5 @@
 aws_region      = "us-east-1"
-my_ip_cidr      = "138.202.129.201/32"
+my_ip_cidr      = "98.207.140.105/32"
 public_key_path = "~/.ssh/devops-assignment-key.pub"
-ami_id          = "ami-01cddd141dea01a2f"
+ami_id          = "ami-0fea4cbcde79e5757"
 instance_type   = "t2.micro"
