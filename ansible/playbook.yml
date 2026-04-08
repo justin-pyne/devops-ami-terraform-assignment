@@ -35,11 +35,13 @@
       ansible.builtin.command: docker --version
       register: docker_version
       changed_when: false
+      check_mode: no
 
     - name: Report disk usage
       ansible.builtin.command: df -h /
       register: disk_usage
       changed_when: false
+      check_mode: no
 
     - name: Show Docker version
       ansible.builtin.debug:
