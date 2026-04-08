@@ -1,0 +1,50 @@
+---
+- name: Configure mixed OS EC2 instances
+  hosts: managed
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Update and upgrade Ubuntu packages
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: dist
+      when: "'ubuntu' in group_names"
+
+    - name: Ensure latest Docker on Ubuntu
+      ansible.builtin.apt:
+        name: docker.io
+        state: latest
+        update_cache: yes
+      when: "'ubuntu' in group_names"
+
+    - name: Update Amazon Linux packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_only: true
+      when: "'amazon' in group_names"
+
+    - name: Ensure latest Docker on Amazon Linux
+      ansible.builtin.dnf:
+        name: docker
+        state: latest
+      when: "'amazon' in group_names"
+
+    - name: Verify Docker version
+      ansible.builtin.command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Report disk usage
+      ansible.builtin.command: df -h /
+      register: disk_usage
+      changed_when: false
+
+    - name: Show Docker version
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} -> {{ docker_version.stdout }}"
+
+    - name: Show disk usage
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} -> {{ disk_usage.stdout_lines }}"
