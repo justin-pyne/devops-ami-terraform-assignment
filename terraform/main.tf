@@ -7,6 +7,26 @@ resource "aws_key_pair" "assignment_key" {
   public_key = local.public_key
 }
 
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+}
+
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
@@ -94,8 +114,22 @@ resource "aws_instance" "bastion" {
   }
 }
 
-resource "aws_instance" "private_instances" {
-  count                  = 6
+resource "aws_instance" "ansible_controller" {
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = module.vpc.public_subnets[1]
+  vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
+  associate_public_ip_address = true
+  key_name                    = aws_key_pair.assignment_key.key_name
+
+  tags = {
+    Name = "ansible-controller"
+    Role = "controller"
+  }
+}
+
+resource "aws_instance" "amazon_instances" {
+  count                  = 3
   ami                    = var.ami_id
   instance_type          = var.instance_type
   subnet_id              = module.vpc.private_subnets[count.index % 2]
@@ -103,6 +137,21 @@ resource "aws_instance" "private_instances" {
   key_name               = aws_key_pair.assignment_key.key_name
 
   tags = {
-    Name = "private-instance-${count.index + 1}"
+    Name = "amazon-instance-${count.index + 1}"
+    OS   = "amazon"
+  }
+}
+
+resource "aws_instance" "ubuntu_instances" {
+  count                  = 3
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = var.instance_type
+  subnet_id              = module.vpc.private_subnets[count.index % 2]
+  vpc_security_group_ids = [aws_security_group.private_sg.id]
+  key_name               = aws_key_pair.assignment_key.key_name
+
+  tags = {
+    Name = "ubuntu-instance-${count.index + 1}"
+    OS   = "ubuntu"
   }
 }
