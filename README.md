@@ -120,20 +120,9 @@ After running the project:
 
 ## Screenshots
 
-### Terraform Apply
-![Terraform Apply](screenshots/terraform-apply.png)
+Screenshots are in the following Drive as they were too large to upload to Github:
 
-### EC2 Instances in Console
-![EC2 Instances in Console](screenshots/ec2-console.png)
-
-### Ansible Ping Output
-![Ansible Ping Output](screenshots/ansible-ping.png)
-
-### Ansible Playbook
-![Ansible Playbook](screenshots/ansible-playbook.png)
-
-### Ansible Playbook Output
-![Ansible Playbook Output](screenshots/playbook-output.png)
+- https://drive.google.com/drive/folders/1XW0cv9PiYo_sbiVgecHvHdCXjRX4YgB1?usp=sharing
 
 ---
 
