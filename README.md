@@ -1,4 +1,4 @@
-# DevOps Assignment - Packer + Terraform
+# DevOps Assignment - Packer + Terraform + Ansible
 
 ## What I Built
 
@@ -9,16 +9,28 @@ I created a custom Amazon Linux AMI using Packer. The AMI includes Docker and my
 Using Terraform, I provisioned:
 - 1 VPC
 - Public and private subnets
+- 1 ansible controller in the public subnet
+- Static inventory
+- 1 playbook
 - 1 bastion host in the public subnet
-- 6 EC2 instances in the private subnets
+- 1 NAT Gateway
+- 6 EC2 instances in the private subnets: 3 Amazon Linux and 3 Ubuntu
 - Security groups so that:
-  - the bastion only accepts SSH from my IP
-  - the private instances only accept SSH from the bastion
+  - the bastion + ansible controller only accepts SSH from my IP
+  - the private instances only accept SSH from the bastion + ansible
+
+
+### Part C - Playbook with Ansible
+Using Ansible, I created an Ansible Playbook that will:
+- Update and upgrade the packages (if needed)
+- Verify we are running the latest Docker
+- Report the disk usage for each EC2 instance
 
 ---
 
 ## Files in This Project
 
+- `ansible/` - Ansible files used to configure and run the playbook
 - `packer/` - Packer files used to build the custom AMI
 - `terraform/` - Terraform files used to provision the infrastructure
 - `README.md` - This file
@@ -39,17 +51,39 @@ packer build -var "ssh_public_key_path=$HOME/.ssh/devops-assignment-key.pub" .
 
 This created a custom AMI in AWS.
 
+Make sure to update `terraform.tfvars` with your AMI ID and IP.
+
 ### 2. Provision infrastructure with Terraform
 From the `terraform` directory:
 
 ```bash
 terraform init
+terraform fmt
 terraform validate
 terraform plan
 terraform apply
 ```
 
-This created the VPC, subnets, bastion host, and 6 private instances.
+This created the VPC, subnets, bastion host, ansible controller, and 6 private instances.
+
+Take the outputs from terraform and update `inventory.ini` in the `ansible` directory.
+
+### 3. Set up the Ansible Controller
+- Add private key to SSH agent forwarding
+- SSH to controller with agent forwarding
+- install ansible-core
+- clone/copy repo
+
+
+
+### 4. Run the Ansible Playbook
+From the `ansible` directory in the Ansible Controller, run:
+
+```bash
+ansible managed -m ping
+ansible-playbook playbook.yml --check
+ansible-playbook playbook.yml
+```
 
 ---
 
@@ -77,41 +111,29 @@ This allowed me to connect to a private instance through the bastion host.
 
 After running the project:
 - The custom AMI appears in EC2 > AMIs
-- 1 bastion host is created in the public subnet
+- 1 bastion host + 1 ansible controller are created in the public subnet
 - 6 EC2 instances are created in private subnets
-- Only the bastion has a public IP
+- Only the bastion + ansible controller have public IPs
 - The private instances are reachable only through the bastion
 
 ---
 
 ## Screenshots
 
-### Packer AMI Build Success
-![Packer AMI Build Success](screenshots/packer-ami-success.png)
+### Terraform Apply
+![Terraform Apply](screenshots/terraform-apply.png)
 
-### AMI in AWS Console
-![AMI in AWS Console](screenshots/ami-aws-console.png)
+### EC2 Instances in Console
+![EC2 Instances in Console](screenshots/ec2-console.png)
 
-### Terraform Apply Success
-![Terraform Apply Success](screenshots/terraform-apply-success.png)
+### Ansible Ping Output
+![Ansible Ping Output](screenshots/ansible-ping.png)
 
-### VPC Created in AWS
-![VPC](screenshots/vpc.png)
+### Ansible Playbook
+![Ansible Playbook](screenshots/ansible-playbook.png)
 
-### EC2 Instances Created by Terraform
-![Terraform Instances](screenshots/terraform-instances.png)
-
-### Bastion Security Group
-![Bastion Security Group](screenshots/bastion-sg.png)
-
-### Private Instance Security Group
-![Private Security Group](screenshots/private-sg.png)
-
-### SSH Agent Forwarding to Bastion
-![SSH Port Forwarding](screenshots/ssh-port-forwarding.png)
-
-### SSH from Bastion to Private Instance
-![Bastion to Private SSH](screenshots/bastion-private-ssh.png)
+### Ansible Playbook Output
+![Ansible Playbook Output](screenshots/playbook-output.png)
 
 ---
 
